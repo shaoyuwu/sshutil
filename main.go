@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -47,11 +48,9 @@ func (ss *SSH) addrFormat(host string, port string) (addr string) {
 //ssh连接配置,获取sshclient
 func (ss *SSH) connect(host string) (*ssh.Client, error) {
 
-	// auth := ss.sshAuthMethod(host)
-	auth := make([]ssh.AuthMethod, 0)
 	//get auth method
 	auth = make([]ssh.AuthMethod, 0)
-	auth = append(auth, ssh.Password(ss.Password))
+	auth = ss.sshAuthMethod()
 	clientConfig = &ssh.ClientConfig{
 		User:            ss.User,
 		Auth:            auth,
@@ -59,7 +58,7 @@ func (ss *SSH) connect(host string) (*ssh.Client, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	addr := ss.addrFormat(ss.Host, ss.Port)
+	addr := ss.addrFormat(host, ss.Port)
 	sshClient, err := ssh.Dial("tcp", addr, clientConfig)
 	if err != nil {
 		return nil, err
@@ -67,15 +66,31 @@ func (ss *SSH) connect(host string) (*ssh.Client, error) {
 	return sshClient, err
 }
 
-// func (ss *SSH) sshAuthMethod(host string) (auth []ssh.AuthMethod) {
-// 	if ss.Password != "" {
-// 		auth = append(auth, ss.sshPasswordMethod(ss.Password))
-// 	}
-// }
+func (ss *SSH) sshAuthMethod() (auth []ssh.AuthMethod) {
+	if ss.Password != "" {
+		auth = append(auth, ss.sshPasswordMethod(ss.Password))
+	} else {
+		auth = append(auth, ss.sshPrivateKeyMethod(ss.PkFile))
+	}
+	return auth
+}
 
-// func (ss *SSH) sshPasswordMethod(passwd string) ssh.AuthMethod {
-// 	return ssh.Password(passwd)
-// }
+func (ss *SSH) sshPasswordMethod(passwd string) ssh.AuthMethod {
+	return ssh.Password(passwd)
+}
+
+func (ss *SSH) sshPrivateKeyMethod(pkfile string) ssh.AuthMethod {
+	fmt.Printf("pkfile: %v\n", pkfile)
+	key, err := ioutil.ReadFile(pkfile)
+	if err != nil {
+		fmt.Printf("读取密钥失败: %v\n", err)
+	}
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		fmt.Printf("密钥签名失败: %v\n", err)
+	}
+	return ssh.PublicKeys(signer)
+}
 
 //ssh基于密码远程连接
 //获取ssh session
@@ -225,12 +240,13 @@ func main() {
 		Password: "123456",
 		Host:     "192.168.158.160",
 		Port:     "22",
+		// PkFile: GetHome() + "\\id_rsa",
 	}
-	// cmd := "df -h"
-	// result := SSHConfig.Cmd(cmd)
-	// fmt.Printf("result: \n%v", string(result))
+	cmd := "df -h"
+	result := SSHConfig.Cmd(cmd)
+	fmt.Printf("result: \n%v", string(result))
 
 	// SSHConfig.UploadFile()
 
-	SSHConfig.Download()
+	// SSHConfig.Download()
 }
